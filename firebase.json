@@ -1,0 +1,32 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Indur Real Estate",
+        "supportEmail": "sumanthreddyaleti@gmail.com",
+        "authorizedRedirectUris": [
+          "http://localhost:5173",
+          "https://nizamabad-698d9.firebaseapp.com",
+          "https://frontend.vercel.app",
+          "https://indur.site",
+          "https://www.indur.site"
+        ]
+      }
+    },
+    "authorizedDomains": [
+      "localhost",
+      "nizamabad-698d9.firebaseapp.com",
+      "nizamabad-698d9.web.app",
+      "frontend.vercel.app",
+      "indur.site",
+      "www.indur.site"
+    ]
+  }
+}

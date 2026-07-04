@@ -1,0 +1,38 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function underSizeLimit() {
+      return request.resource.size < 5 * 1024 * 1024;
+    }
+
+    function isListingOwner(listingId) {
+      return isSignedIn()
+        && firestore.get(/databases/(default)/documents/listings/$(listingId)).data.sellerId == request.auth.uid;
+    }
+
+    match /profiles/{userId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn()
+        && request.auth.uid == userId
+        && isImage()
+        && underSizeLimit();
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /listings/{listingId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isListingOwner(listingId) && isImage() && underSizeLimit();
+      allow delete: if isListingOwner(listingId);
+    }
+  }
+}

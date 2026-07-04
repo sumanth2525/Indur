@@ -1,45 +1,4 @@
-const KEYS = {
-  users: 'nizam_users',
-  properties: 'nizam_properties',
-  conversations: 'nizam_conversations',
-  tickets: 'nizam_tickets',
-  currentUser: 'nizam_current_user',
-  location: 'nizam_location',
-}
-
-function read(key, fallback = []) {
-  try {
-    const raw = localStorage.getItem(key)
-    return raw ? JSON.parse(raw) : fallback
-  } catch {
-    return fallback
-  }
-}
-
-function write(key, data) {
-  localStorage.setItem(key, JSON.stringify(data))
-}
-
-export const storage = {
-  getUsers: () => read(KEYS.users, []),
-  saveUsers: (users) => write(KEYS.users, users),
-
-  getProperties: () => read(KEYS.properties, []),
-  saveProperties: (props) => write(KEYS.properties, props),
-
-  getConversations: () => read(KEYS.conversations, []),
-  saveConversations: (convs) => write(KEYS.conversations, convs),
-
-  getTickets: () => read(KEYS.tickets, []),
-  saveTickets: (tickets) => write(KEYS.tickets, tickets),
-
-  getCurrentUser: () => read(KEYS.currentUser, null),
-  setCurrentUser: (user) => write(KEYS.currentUser, user),
-  clearCurrentUser: () => localStorage.removeItem(KEYS.currentUser),
-
-  getLocation: () => localStorage.getItem(KEYS.location) || 'Nizamabad',
-  setLocation: (loc) => localStorage.setItem(KEYS.location, loc),
-}
+import { normalizeLocation, DEFAULT_LOCATION } from '../data/nizamabadLocations'
 
 export function generateId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
@@ -86,4 +45,18 @@ export function formatPropertySummary(property, t) {
     parts.push(`${property.facing} ${t('facing')}`)
   }
   return parts.length ? parts.join(' · ') : property.title
+}
+
+export function defaultBrowseLocation() {
+  return { ...DEFAULT_LOCATION }
+}
+
+export function resolveBrowseLocation(profile) {
+  if (profile?.browseLocation) return normalizeLocation(profile.browseLocation)
+  if (profile?.location) return normalizeLocation(profile.location)
+  return defaultBrowseLocation()
+}
+
+export function browseLocationLabel(profile) {
+  return resolveBrowseLocation(profile).label || DEFAULT_LOCATION.label
 }

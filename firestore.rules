@@ -1,0 +1,129 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isConversationParticipant(data) {
+      return isSignedIn()
+        && (request.auth.uid == data.buyerId || request.auth.uid == data.sellerId);
+    }
+
+    function isValidProfile(data) {
+      return data.keys().hasAll(['name', 'email', 'phone', 'location', 'saved', 'views', 'authProvider'])
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 120
+        && data.email is string && data.email.size() <= 254
+        && data.phone is string && data.phone.size() <= 20
+        && data.location is string && data.location.size() <= 120
+        && data.saved is list && data.saved.size() <= 200
+        && data.views is int && data.views >= 0
+        && data.authProvider is string
+        && (!('lang' in data) || (data.lang is string && data.lang in ['en', 'te']));
+    }
+
+    function isValidPublicProfile(data) {
+      return data.keys().hasOnly(['name', 'photoURL', 'updatedAt'])
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 120
+        && (!('photoURL' in data) || data.photoURL is string && data.photoURL.size() <= 2048);
+    }
+
+    function isSaveCountAdjustOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['saveCount', 'updatedAt'])
+        && request.resource.data.saveCount >= 0
+        && (request.resource.data.saveCount == resource.data.saveCount + 1
+            || request.resource.data.saveCount == resource.data.saveCount - 1);
+    }
+
+    function isValidListing(data) {
+      return data.keys().hasAll([
+          'type', 'purpose', 'title', 'description', 'price', 'location',
+          'images', 'sellerId', 'status', 'sqft', 'bedrooms', 'facing',
+          'readyToMove', 'views', 'createdAt', 'updatedAt'
+        ])
+        && data.type in ['house', 'land', 'agriculture', 'apartment']
+        && data.purpose in ['sell', 'rent']
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 200
+        && data.description is string && data.description.size() <= 5000
+        && data.price is number && data.price >= 0
+        && data.location is map
+        && data.images is list && data.images.size() <= 10
+        && data.sellerId is string
+        && data.status in ['active', 'sold', 'removed']
+        && data.sqft is int && data.sqft >= 0
+        && data.bedrooms is int && data.bedrooms >= 0
+        && data.facing is string
+        && data.readyToMove is bool
+        && data.views is int && data.views >= 0;
+    }
+
+    function isViewIncrementOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views', 'updatedAt'])
+        && request.resource.data.views == resource.data.views + 1
+        && request.resource.data.sellerId == resource.data.sellerId
+        && request.resource.data.title == resource.data.title;
+    }
+
+    match /profiles/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidProfile(request.resource.data);
+      allow update: if isOwner(userId)
+        && isValidProfile(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['name', 'email', 'phone', 'photoURL', 'location', 'browseLocation', 'saved', 'views', 'lang', 'updatedAt']);
+      allow delete: if isOwner(userId);
+    }
+
+    match /publicProfiles/{userId} {
+      allow read: if isSignedIn();
+      allow create, update: if isOwner(userId) && isValidPublicProfile(request.resource.data);
+      allow delete: if isOwner(userId);
+    }
+
+    match /listings/{listingId} {
+      allow read: if isSignedIn() || resource.data.status == 'active';
+      allow create: if isSignedIn()
+        && request.resource.data.sellerId == request.auth.uid
+        && isValidListing(request.resource.data);
+      allow update: if isSignedIn() && (
+        (resource.data.sellerId == request.auth.uid
+          && request.resource.data.sellerId == resource.data.sellerId
+          && isValidListing(request.resource.data))
+        || isViewIncrementOnly()
+        || isSaveCountAdjustOnly()
+      );
+      allow delete: if isSignedIn() && resource.data.sellerId == request.auth.uid;
+    }
+
+    match /conversations/{conversationId} {
+      allow read: if isConversationParticipant(resource.data);
+      allow create: if isSignedIn()
+        && request.resource.data.buyerId == request.auth.uid
+        && request.resource.data.sellerId is string
+        && request.resource.data.propertyId is string
+        && request.resource.data.messages is list;
+      allow update: if isConversationParticipant(resource.data)
+        && isConversationParticipant(request.resource.data)
+        && request.resource.data.buyerId == resource.data.buyerId
+        && request.resource.data.sellerId == resource.data.sellerId
+        && request.resource.data.propertyId == resource.data.propertyId;
+      allow delete: if isConversationParticipant(resource.data);
+    }
+
+    match /tickets/{ticketId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.subject is string
+        && request.resource.data.message is string
+        && request.resource.data.status == 'open';
+      allow update, delete: if false;
+    }
+  }
+}

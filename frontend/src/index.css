@@ -1,17 +1,21 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #0a0a0a;
-  --color-muted: #888888;
-  --color-muted-light: #b3b3b3;
-  --color-surface: #f7f7f7;
-  --color-border: #eeeeee;
-  --color-border-strong: #e0e0e0;
-  --color-teal: #0a0a0a;
-  --color-teal-dark: #000000;
-  --color-teal-light: #f0f0f0;
-  --color-text: #0a0a0a;
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --color-primary: #0C3B4E;
+  --color-brand: #0C3B4E;
+  --color-brand-dark: #082A38;
+  --color-accent: #E8A838;
+  --color-accent-hover: #D4952E;
+  --color-muted: #64748B;
+  --color-muted-light: #94A3B8;
+  --color-surface: #F8FAFB;
+  --color-border: #E2E8F0;
+  --color-border-strong: #CBD5E1;
+  --color-teal: #0C3B4E;
+  --color-teal-dark: #082A38;
+  --color-teal-light: #E8F4F8;
+  --color-text: #0F172A;
+  --font-sans: "Inter", "Poppins", system-ui, -apple-system, sans-serif;
 }
 
 * {
@@ -40,6 +44,149 @@ body {
   display: none;
 }
 
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.5s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up { animation: none; }
+}
+
+/* Login page animations */
+@keyframes login-fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes login-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes login-float {
+  0%, 100% { transform: translateY(0) rotate(var(--login-rotate, 0deg)); }
+  50% { transform: translateY(-10px) rotate(var(--login-rotate, 0deg)); }
+}
+
+@keyframes login-drift {
+  0%, 100% { transform: translate(0, 0) rotate(var(--login-rotate, 0deg)); opacity: 0.06; }
+  33% { transform: translate(6px, -8px) rotate(calc(var(--login-rotate, 0deg) + 4deg)); opacity: 0.09; }
+  66% { transform: translate(-4px, 6px) rotate(calc(var(--login-rotate, 0deg) - 3deg)); opacity: 0.05; }
+}
+
+@keyframes login-ken-burns {
+  from { transform: scale(1); }
+  to { transform: scale(1.08); }
+}
+
+@keyframes login-scale-in {
+  from { opacity: 0; transform: scale(0.92) translateY(16px) rotate(var(--login-rotate, 0deg)); }
+  to { opacity: 1; transform: scale(1) translateY(0) rotate(var(--login-rotate, 0deg)); }
+}
+
+@keyframes login-slide-right {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.login-animate-up {
+  animation: login-fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.login-animate-in {
+  animation: login-fade-in 0.8s ease-out both;
+}
+
+.login-animate-slide {
+  animation: login-slide-right 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.login-brand-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.login-brand-bg img {
+  position: absolute;
+  width: 120%;
+  height: 120%;
+  object-fit: cover;
+  animation: login-ken-burns 18s ease-in-out infinite alternate;
+}
+
+.login-brand-bg img:nth-child(1) {
+  inset: -10% 0 0 -10%;
+  opacity: 0.35;
+}
+
+.login-brand-bg img:nth-child(2) {
+  inset: 0 -10% -10% 0;
+  opacity: 0.22;
+  animation-delay: -9s;
+  animation-duration: 22s;
+}
+
+.login-brand-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 0.78) 45%, rgba(15, 23, 42, 0.55) 100%),
+    radial-gradient(ellipse at 25% 15%, rgba(255, 255, 255, 0.12), transparent 50%);
+}
+
+.login-showcase-card {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 1rem;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  animation: login-scale-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both, login-float 6s ease-in-out infinite;
+}
+
+.login-showcase-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.login-showcase-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.35), transparent 55%);
+}
+
+.login-drift-icon {
+  animation: login-drift 8s ease-in-out infinite;
+}
+
+.login-pill-hover {
+  transition: transform 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.login-pill-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-animate-up,
+  .login-animate-in,
+  .login-animate-slide,
+  .login-showcase-card,
+  .login-drift-icon,
+  .login-brand-bg img {
+    animation: none;
+  }
+}
+
 .material-symbols-outlined {
   font-family: "Material Symbols Outlined";
   font-weight: normal;
@@ -47,6 +194,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   line-height: 1;
   letter-spacing: normal;
   text-transform: none;
@@ -55,4 +203,6 @@ body {
   direction: ltr;
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "liga";
 }

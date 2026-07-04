@@ -1,78 +1,129 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { storage } from '../services/storage'
-import { createUser, getUserById } from '../data/seed'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
+import { fetchProfileById } from '../services/dataApi'
+import {
+  firebaseSignOut,
+  signInWithGoogle as firebaseGoogleSignIn,
+  completePhoneSignIn,
+  subscribeToAuthChanges,
+} from '../services/firebaseAuth'
+import { sendPhoneOtp, verifyPhoneOtp, resetPhoneAuth } from '../services/phoneAuth'
+import { GUEST_USER, isGuestSessionActive, setGuestSession } from './guestUser'
 
 const AuthContext = createContext(null)
 
+export { AuthContext }
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => storage.getCurrentUser())
-  const [loading, setLoading] = useState(false)
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [authReady, setAuthReady] = useState(false)
 
   useEffect(() => {
-    if (user?.id) {
-      const fresh = getUserById(user.id)
-      if (fresh) setUser(fresh)
-    }
+    const unsubscribe = subscribeToAuthChanges((nextUser) => {
+      if (nextUser) {
+        setGuestSession(false)
+        setUser(nextUser)
+      } else if (isGuestSessionActive()) {
+        setUser(GUEST_USER)
+      } else {
+        setUser(null)
+      }
+      setAuthReady(true)
+      setLoading(false)
+    })
+    return unsubscribe
   }, [])
 
   const loginWithGoogle = useCallback(async () => {
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 600))
-    let existing = storage.getUsers().find((u) => u.authProvider === 'google')
-    if (!existing) {
-      existing = createUser({
-        name: 'Ravi Kumar',
-        email: 'ravi@gmail.com',
-        phone: '+91 98765 43210',
-        authProvider: 'google',
-      })
+    try {
+      setGuestSession(false)
+      const signedIn = await firebaseGoogleSignIn()
+      setUser(signedIn)
+      return signedIn
+    } finally {
+      setLoading(false)
     }
-    storage.setCurrentUser(existing)
-    setUser(existing)
-    setLoading(false)
-    return existing
   }, [])
 
   const loginWithPhone = useCallback(async (phone, otp) => {
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 600))
-    if (otp !== '123456') {
+    try {
+      setGuestSession(false)
+      const fbUser = await verifyPhoneOtp(otp)
+      const signedIn = await completePhoneSignIn(fbUser, phone)
+      setUser(signedIn)
+      return signedIn
+    } finally {
       setLoading(false)
-      throw new Error('Invalid OTP')
     }
-    let existing = storage.getUsers().find((u) => u.phone === phone)
-    if (!existing) {
-      existing = createUser({
-        name: 'New User',
-        phone,
-        authProvider: 'phone',
-      })
-    }
-    storage.setCurrentUser(existing)
-    setUser(existing)
-    setLoading(false)
-    return existing
   }, [])
 
-  const logout = useCallback(() => {
-    storage.clearCurrentUser()
-    setUser(null)
+  const requestPhoneOtp = useCallback(async (phone) => {
+    await sendPhoneOtp(phone)
   }, [])
 
-  const refreshUser = useCallback(() => {
-    if (user?.id) {
-      const fresh = getUserById(user.id)
-      if (fresh) {
-        storage.setCurrentUser(fresh)
-        setUser(fresh)
+  const continueAsGuest = useCallback(() => {
+    setGuestSession(true)
+    setUser(GUEST_USER)
+  }, [])
+
+  const logout = useCallback(async () => {
+    setLoading(true)
+    try {
+      if (user?.isGuest) {
+        setGuestSession(false)
+        setUser(null)
+        return
       }
+      resetPhoneAuth()
+      await firebaseSignOut()
+      setUser(null)
+    } finally {
+      setLoading(false)
     }
+  }, [user?.isGuest])
+
+  const refreshUser = useCallback(async () => {
+    if (!user?.id) return
+    const fresh = await fetchProfileById(user.id)
+    if (fresh) setUser(fresh)
   }, [user?.id])
 
+  const isGuest = Boolean(user?.isGuest)
+  const isAuthenticated = Boolean(user && !user.isGuest)
+
+  const value = useMemo(
+    () => ({
+      user,
+      loading: loading || !authReady,
+      isGuest,
+      isAuthenticated,
+      loginWithGoogle,
+      loginWithPhone,
+      requestPhoneOtp,
+      continueAsGuest,
+      logout,
+      refreshUser,
+      setUser,
+    }),
+    [
+      user,
+      loading,
+      authReady,
+      isGuest,
+      isAuthenticated,
+      loginWithGoogle,
+      loginWithPhone,
+      requestPhoneOtp,
+      continueAsGuest,
+      logout,
+      refreshUser,
+    ],
+  )
+
   return (
-    <AuthContext.Provider
-      value={{ user, loading, loginWithGoogle, loginWithPhone, logout, refreshUser, setUser }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

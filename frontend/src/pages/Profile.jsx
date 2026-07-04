@@ -1,8 +1,9 @@
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useLanguage } from '../i18n/LanguageContext'
 import { useAuth } from '../context/AuthContext'
-import { storage } from '../services/storage'
+import { fetchSellerListings } from '../services/dataApi'
 import ShareAppCard from '../components/ShareAppCard'
 
 const menuItems = [
@@ -17,8 +18,13 @@ export default function Profile() {
   const { t } = useLanguage()
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const properties = storage.getProperties()
-  const myListings = properties.filter((p) => p.sellerId === user?.id)
+  const [myListings, setMyListings] = useState([])
+
+  useEffect(() => {
+    if (!user?.id) return
+    fetchSellerListings(user.id).then(setMyListings)
+  }, [user?.id])
+
   const activeCount = myListings.filter((p) => p.status === 'active').length
   const totalViews = myListings.reduce((s, p) => s + (p.views || 0), 0)
 

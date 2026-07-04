@@ -2,6 +2,9 @@ node_modules/
 dist/
 .netlify/
 .vercel/
+.firebase/
+firebase-debug.log
+frontend/.env
 
 backend/bin/
 backend/obj/

@@ -1,6 +1,13 @@
-import { storage } from './storage'
+import { createListing } from './dataApi'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
+const ADMIN_KEY = import.meta.env.VITE_ADMIN_API_KEY || ''
+
+function adminHeaders() {
+  const headers = { 'Content-Type': 'application/json' }
+  if (ADMIN_KEY) headers['X-Admin-Key'] = ADMIN_KEY
+  return headers
+}
 
 export async function getImportStatus() {
   const res = await fetch(`${API_BASE}/api/import/99acres/status`)
@@ -8,32 +15,32 @@ export async function getImportStatus() {
   return res.json()
 }
 
-export async function importFrom99Acres({ location = 'Nizamabad', purpose = 'sell', limit = 30 } = {}) {
+export async function importFrom99Acres({ location = 'Nizamabad', purpose = 'sell', limit = 30, sellerId } = {}) {
   const res = await fetch(`${API_BASE}/api/import/99acres`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: adminHeaders(),
     body: JSON.stringify({ location, purpose, limit }),
   })
 
   const data = await res.json()
   if (!res.ok) throw new Error(data.error || data.hint || 'Import failed')
 
-  if (data.properties?.length) {
-    mergeImportedProperties(data.properties)
+  if (data.properties?.length && sellerId) {
+    await mergeImportedProperties(data.properties, sellerId)
   }
 
   return data
 }
 
-export function mergeImportedProperties(imported) {
-  const existing = storage.getProperties()
-  const byId = new Map(existing.map((p) => [p.id, p]))
+export async function mergeImportedProperties(imported, sellerId) {
   for (const p of imported) {
-    byId.set(p.id, {
-      ...p,
-      location: p.location || { area: 'Nizamabad', city: 'Nizamabad' },
-      images: p.images?.length ? p.images : [],
-    })
+    await createListing(
+      {
+        ...p,
+        location: p.location || { area: 'Nizamabad', city: 'Nizamabad' },
+        images: p.images?.length ? p.images : [],
+      },
+      sellerId,
+    )
   }
-  storage.saveProperties([...byId.values()])
 }

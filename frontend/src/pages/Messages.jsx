@@ -1,30 +1,52 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useLanguage } from '../i18n/LanguageContext'
 import { useAuth } from '../context/AuthContext'
-import { storage, formatTime } from '../services/storage'
-import { getUserById, getPropertyById } from '../data/seed'
+import { formatTime } from '../services/formatters'
+import {
+  watchConversations,
+  fetchPublicProfileById,
+  fetchListingById,
+} from '../services/dataApi'
 
 export default function Messages() {
   const { t } = useLanguage()
   const { user } = useAuth()
   const [search, setSearch] = useState('')
-  const [conversations, setConversations] = useState(() => storage.getConversations())
+  const [conversations, setConversations] = useState([])
+  const [meta, setMeta] = useState({})
+
+  useEffect(() => {
+    if (!user?.id) return
+    return watchConversations(user.id, setConversations, console.error)
+  }, [user?.id])
+
+  useEffect(() => {
+    async function loadMeta() {
+      const entries = {}
+      for (const conv of conversations) {
+        const otherId = conv.buyerId === user?.id ? conv.sellerId : conv.buyerId
+        const [other, prop] = await Promise.all([
+          fetchPublicProfileById(otherId),
+          fetchListingById(conv.propertyId),
+        ])
+        entries[conv.id] = { other, prop }
+      }
+      setMeta(entries)
+    }
+    if (conversations.length) loadMeta()
+    else setMeta({})
+  }, [conversations, user?.id])
 
   const myConvs = useMemo(() => {
-    return conversations
-      .filter((c) => c.buyerId === user?.id || c.sellerId === user?.id)
-      .filter((c) => {
-        if (!search) return true
-        const otherId = c.buyerId === user?.id ? c.sellerId : c.buyerId
-        const other = getUserById(otherId)
-        const prop = getPropertyById(c.propertyId)
-        const q = search.toLowerCase()
-        return other?.name?.toLowerCase().includes(q) || prop?.title?.toLowerCase().includes(q)
-      })
-      .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-  }, [conversations, user, search])
+    return conversations.filter((c) => {
+      if (!search) return true
+      const { other, prop } = meta[c.id] || {}
+      const q = search.toLowerCase()
+      return other?.name?.toLowerCase().includes(q) || prop?.title?.toLowerCase().includes(q)
+    })
+  }, [conversations, user, search, meta])
 
   return (
     <div className="px-4 lg:px-0">
@@ -51,8 +73,7 @@ export default function Messages() {
         <div className="lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:gap-4 flex flex-col gap-1">
           {myConvs.map((conv) => {
             const otherId = conv.buyerId === user?.id ? conv.sellerId : conv.buyerId
-            const other = getUserById(otherId)
-            const prop = getPropertyById(conv.propertyId)
+            const { other, prop } = meta[conv.id] || {}
             const lastMsg = conv.messages[conv.messages.length - 1]
             const unread = conv.messages.some(
               (m) => m.senderId !== user?.id && new Date(conv.updatedAt) > new Date(Date.now() - 3600000),
@@ -74,7 +95,7 @@ export default function Messages() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <p className="font-semibold text-sm">{other?.name}</p>
+                    <p className="font-semibold text-sm">{other?.name || 'User'}</p>
                     {lastMsg && (
                       <span className="text-xs text-muted shrink-0 ml-2">
                         {formatTime(lastMsg.timestamp)}

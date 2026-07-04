@@ -1,3 +1,26 @@
-{
-  "rewrites": [{ "source": "/((?!assets/).*)", "destination": "/index.html" }]
-}
+{
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/((?!assets/|api/).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(self)" },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com https://www.googletagmanager.com https://www.google-analytics.com https://va.vercel-scripts.com https://www.google.com https://www.gstatic.com https://www.recaptcha.net; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://nizamabad-698d9.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.google-analytics.com https://*.google-analytics.com https://va.vercel-scripts.com https://www.google.com https://www.gstatic.com https://www.recaptcha.net wss://*.firebaseio.com; img-src 'self' data: blob: https://images.pexels.com https://firebasestorage.googleapis.com https://nizamabad-698d9.firebasestorage.app https://*.googleusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; frame-src https://accounts.google.com https://nizamabad-698d9.firebaseapp.com https://www.google.com https://www.gstatic.com https://www.recaptcha.net; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'"
+        }
+      ]
+    }
+  ]
+}
+

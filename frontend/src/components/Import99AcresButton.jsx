@@ -1,15 +1,19 @@
 import { useState } from 'react'
 import Icon from './Icon'
 import { useLanguage } from '../i18n/LanguageContext'
+import { useAuth } from '../context/AuthContext'
 import { importFrom99Acres } from '../services/apifyImport'
 
 export default function Import99AcresButton({ location, purpose, onImported }) {
   const { t } = useLanguage()
+  const { user } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
-  const apiEnabled = Boolean(import.meta.env.VITE_API_URL) || import.meta.env.DEV
+  const apiEnabled = import.meta.env.VITE_ENABLE_IMPORT === 'true'
+    && Boolean(import.meta.env.VITE_API_URL)
+    && Boolean(import.meta.env.VITE_ADMIN_API_KEY)
   if (!apiEnabled) return null
 
   const handleImport = async () => {
@@ -17,7 +21,7 @@ export default function Import99AcresButton({ location, purpose, onImported }) {
     setError('')
     setMessage('')
     try {
-      const result = await importFrom99Acres({ location, purpose, limit: 25 })
+      const result = await importFrom99Acres({ location, purpose, limit: 25, sellerId: user?.id })
       setMessage(t('importSuccess').replace('{n}', String(result.imported)))
       onImported?.()
     } catch (e) {

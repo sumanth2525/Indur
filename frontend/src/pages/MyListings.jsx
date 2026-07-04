@@ -1,28 +1,33 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useLanguage } from '../i18n/LanguageContext'
 import { useAuth } from '../context/AuthContext'
-import { storage, formatPrice } from '../services/storage'
-import { deleteProperty, updateProperty } from '../data/seed'
+import { formatPrice } from '../services/formatters'
+import { fetchSellerListings, removeListing, updateListingRecord } from '../services/dataApi'
 
 export default function MyListings() {
   const { t } = useLanguage()
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [listings, setListings] = useState(() =>
-    storage.getProperties().filter((p) => p.sellerId === user?.id),
-  )
+  const [listings, setListings] = useState([])
 
-  const refresh = () => setListings(storage.getProperties().filter((p) => p.sellerId === user?.id))
+  const refresh = async () => {
+    if (!user?.id) return
+    setListings(await fetchSellerListings(user.id))
+  }
 
-  const handleDelete = (id) => {
-    deleteProperty(id)
+  useEffect(() => {
+    refresh()
+  }, [user?.id])
+
+  const handleDelete = async (id) => {
+    await removeListing(id)
     refresh()
   }
 
-  const handleMarkSold = (id) => {
-    updateProperty(id, { status: 'sold' })
+  const handleMarkSold = async (id) => {
+    await updateListingRecord(id, { status: 'sold' })
     refresh()
   }
 

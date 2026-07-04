@@ -8,10 +8,13 @@ Buy/sell real estate platform for **Nizamabad** and nearby areas.
 |---|---|
 | Frontend | React + Vite + Tailwind CSS |
 | Backend | ASP.NET Core Web API (C#) |
-| Storage (MVP) | Browser `localStorage` + backend JSON files |
+| Storage | Firebase Firestore + Storage |
+| Auth | Firebase Auth (Google + Phone OTP) |
 | i18n | English / Telugu toggle |
 
-Firebase can replace local storage when you're ready.
+All app data (profiles, listings, messages, support tickets) is stored in **Firebase** — no browser localStorage for data.
+
+Phone login uses **Firebase Phone Auth** (enable it in the Firebase Console under Authentication → Sign-in method).
 
 ## Screens
 
@@ -40,7 +43,7 @@ npm run dev
 
 Open http://localhost:5173
 
-### Backend (optional — frontend uses localStorage by default)
+### Backend (optional — 99acres import & Twilio OTP API)
 
 ```bash
 cd backend
@@ -51,6 +54,46 @@ API: http://localhost:5000 — Swagger at `/swagger`
 
 Health check: `GET /api/health`
 
+## Firebase (Nizamabad)
+
+Connected to Firebase project **`nizamabad-698d9`**.
+
+### Firestore collections
+
+| Collection | Document ID | Purpose |
+|---|---|---|
+| `profiles` | Firebase Auth `uid` | User name, email, phone, location, saved listing IDs |
+| `listings` | Auto-generated | Property listings |
+| `conversations` | Auto-generated | Chat threads (buyer ↔ seller) |
+| `tickets` | Auto-generated | Support tickets |
+| `publicProfiles` | Firebase Auth `uid` | Public name/photo for sellers |
+
+### Storage paths
+
+| Path | Purpose |
+|---|---|
+| `profiles/{userId}/avatar.*` | Profile photo |
+| `listings/{listingId}/{filename}` | Listing photos |
+
+**One-time setup:** Enable [Firebase Storage](https://console.firebase.google.com/project/nizamabad-698d9/storage) in the console (click **Get Started**), then deploy storage rules:
+
+```bash
+npx firebase-tools@13.35.1 deploy --only storage --project nizamabad-698d9
+```
+
+```bash
+# CLI (uses sumanthreddyaleti@gmail.com account)
+npx firebase-tools@13.35.1 use nizamabad-698d9
+npx firebase-tools@13.35.1 apps:list WEB --project nizamabad-698d9
+```
+
+Frontend config lives in `frontend/.env` (copy from `frontend/.env.example`). For Vercel, add the same `VITE_FIREBASE_*` variables in the project settings.
+
+**Before Google sign-in works:**
+
+1. In [Firebase Console → Authentication → Sign-in method](https://console.firebase.google.com/project/nizamabad-698d9/authentication/providers), enable **Google**.
+2. Under **Authorized domains**, add your Vercel domain when you deploy (e.g. `your-app.vercel.app`). `localhost` is already allowed for local dev.
+
 ## Project structure
 
 ```
@@ -58,19 +101,19 @@ frontend/src/
   pages/          # All 7 screens + sub-pages
   components/     # PropertyCard, Layout, LanguageToggle
   i18n/           # EN + Telugu translations
-  services/       # localStorage helpers
-  data/seed.js    # Demo data + CRUD
+  services/       # Firebase data layer + formatters
+  data/constants.js
 
 backend/
   Models/         # User, Property, Conversation, SupportTicket
-  Services/       # LocalDataStore (JSON files in Data/)
+  Services/       # LocalDataStore (JSON — legacy API only)
   Controllers/    # REST API endpoints
 ```
 
-## Demo login
+## Login
 
-- **Google**: Click "Continue with Google" (instant demo login)
-- **Phone**: Enter any 10-digit number → OTP `123456`
+- **Google**: Firebase Google sign-in
+- **Phone**: Firebase Phone Auth (SMS OTP via Firebase — enable Phone provider in console)
 
 ## Telugu
 

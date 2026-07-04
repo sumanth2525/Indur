@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using NizamProperty.Api.Security;
 using NizamProperty.Api.Services;
 
 namespace NizamProperty.Api.Controllers;
@@ -21,6 +23,8 @@ public class ImportController : ControllerBase
     /// Requires Apify:Token or APIFY_TOKEN env var.
     /// </summary>
     [HttpPost("99acres")]
+    [RequireAdminApiKey]
+    [EnableRateLimiting("import")]
     public async Task<IActionResult> Import99Acres([FromBody] Import99AcresRequest? request, CancellationToken ct)
     {
         request ??= new Import99AcresRequest();

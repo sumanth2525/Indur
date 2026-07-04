@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useLanguage } from '../i18n/LanguageContext'
 import { useAuth } from '../context/AuthContext'
-import { createTicket } from '../data/seed'
+import { createSupportTicket } from '../services/dataApi'
 
 const FAQ_KEYS = [
   { q: 'faq1Q', a: 'faq1A' },
@@ -22,9 +22,9 @@ export default function Support() {
   const [message, setMessage] = useState('')
   const [submitted, setSubmitted] = useState(false)
 
-  const handleTicket = () => {
+  const handleTicket = async () => {
     if (!subject || !message) return
-    createTicket(user.id, subject, message)
+    await createSupportTicket(user.id, subject, message)
     setSubmitted(true)
     setShowTicket(false)
     setSubject('')

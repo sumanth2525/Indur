@@ -3,13 +3,15 @@ import Icon from '../Icon'
 import { useLanguage } from '../../i18n/LanguageContext'
 
 const mobileItems = [
-  { to: '/', icon: 'home', labelKey: 'home', end: true },
+  { to: '/browse', icon: 'home', labelKey: 'home', end: true },
+  { to: '/browse', icon: 'search', labelKey: 'search', end: true, hash: '#search' },
+  { to: '/post', icon: 'add_circle', labelKey: 'post' },
   { to: '/profile/saved', icon: 'bookmark', labelKey: 'saved' },
   { to: '/profile', icon: 'person', labelKey: 'profile', end: true },
 ]
 
 const desktopItems = [
-  { to: '/', icon: 'dashboard', labelKey: 'dashboard', end: true },
+  { to: '/browse', icon: 'dashboard', labelKey: 'dashboard', end: true },
   { to: '/profile/saved', icon: 'bookmark', labelKey: 'saved' },
   { to: '/messages', icon: 'chat', labelKey: 'messages' },
   { to: '/post', icon: 'add_circle', labelKey: 'postProperty' },
@@ -17,7 +19,15 @@ const desktopItems = [
   { to: '/support', icon: 'help', labelKey: 'helpSupport' },
 ]
 
-function MobileNavItem({ to, icon, labelKey, end, t }) {
+function MobileNavItem({ to, icon, labelKey, end, t, hash }) {
+  if (hash) {
+    return (
+      <a href="/" className="flex flex-col items-center gap-1 py-1 px-3 text-[11px] font-medium text-muted-light min-h-11 justify-center">
+        <Icon name={icon} size={22} />
+        <span>{t(labelKey)}</span>
+      </a>
+    )
+  }
   return (
     <NavLink
       to={to}
@@ -75,7 +85,7 @@ export function Sidebar() {
   return (
     <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 lg:border-r lg:border-border lg:bg-white lg:p-5">
       <div className="mb-10 px-2">
-        <span className="font-bold tracking-[0.08em] text-sm">{t('appName')}</span>
+        <span className="font-bold tracking-tight text-sm">{t('appName')}</span>
       </div>
       <nav className="flex flex-col gap-1">
         {desktopItems.map((item) => (

@@ -1,230 +1,644 @@
 import { useState } from 'react'
+
 import { useNavigate } from 'react-router-dom'
+
 import Icon from '../components/Icon'
+
 import { useLanguage } from '../i18n/LanguageContext'
+
 import { useAuth } from '../context/AuthContext'
-import { createProperty } from '../data/seed'
+
+import { createListing } from '../services/dataApi'
+
 import { POST_AD_PLACEHOLDERS, imagesForBedrooms } from '../data/mockImages'
-import { LOCATIONS } from '../i18n/translations'
+
+import { getMandalNames, ALL_MANDALS } from '../data/nizamabadLocations'
+
+import { isValidListingDescription, isValidListingTitle, isValidPrice, sanitizeText } from '../utils/validation'
+
+import PurposeToggle from '../components/PurposeToggle'
+
+
 
 const STEPS = ['category', 'details', 'photos', 'priceLocation']
+
 const CATEGORIES = ['house', 'land', 'agriculture', 'apartment']
 
+
+
 export default function PostAd() {
+
+  const { t } = useLanguage()
+
   const { user } = useAuth()
+
   const navigate = useNavigate()
+
   const [step, setStep] = useState(0)
+
   const [form, setForm] = useState({
+
     type: 'house',
+
+    purpose: 'sell',
+
     title: '',
+
     description: '',
-    images: [],
+
+    imageFiles: [],
+
+    imagePreviews: [],
+
     price: '',
-    area: '',
+
+    mandal: '',
+
+    village: '',
+
   })
+
   const [submitted, setSubmitted] = useState(false)
+
+  const [submitting, setSubmitting] = useState(false)
+
+  const [error, setError] = useState('')
+
+
 
   const update = (field, value) => setForm((f) => ({ ...f, [field]: value }))
 
-  const handleAddPhoto = () => {
-    const next = POST_AD_PLACEHOLDERS[form.images.length % POST_AD_PLACEHOLDERS.length]
-    update('images', [...form.images, next])
+
+
+  const handleAddPhoto = (event) => {
+
+    const files = Array.from(event.target.files || [])
+
+    if (!files.length) return
+
+    const remaining = 4 - form.imageFiles.length
+
+    const nextFiles = files.slice(0, remaining)
+
+    const previews = nextFiles.map((file) => URL.createObjectURL(file))
+
+    update('imageFiles', [...form.imageFiles, ...nextFiles])
+
+    update('imagePreviews', [...form.imagePreviews, ...previews])
+
+    event.target.value = ''
+
   }
 
-  const handleSubmit = () => {
-    if (!form.title || !form.price || !form.area) return
-    const isPlot = form.type === 'land' || form.type === 'agriculture'
-    const bedrooms = form.type === 'house' ? 2 : form.type === 'apartment' ? 2 : 0
-    const mockImages = imagesForBedrooms(bedrooms, form.type)
-    createProperty(
-      {
-        type: form.type,
-        purpose: 'sell',
-        title: form.title,
-        description: form.description,
-        price: Number(form.price),
-        location: { area: form.area, city: 'Nizamabad', lat: 18.6725, lng: 78.0941 },
-        images: form.images.length ? form.images : [mockImages[0]],
-        sqft: form.type === 'land' ? 2400 : isPlot ? 0 : bedrooms === 1 ? 650 : bedrooms === 2 ? 1200 : 1650,
-        acres: form.type === 'agriculture' ? 2 : undefined,
-        bedrooms: isPlot ? 0 : bedrooms,
-        facing: 'East',
-        readyToMove: !isPlot,
-      },
-      user.id,
-    )
-    setSubmitted(true)
-    setTimeout(() => navigate('/'), 1500)
+
+
+  const handleAddPlaceholder = () => {
+
+    const next = POST_AD_PLACEHOLDERS[form.imagePreviews.length % POST_AD_PLACEHOLDERS.length]
+
+    update('imagePreviews', [...form.imagePreviews, next])
+
   }
+
+
+
+  const handleSubmit = async () => {
+
+    if (!user?.id || !form.mandal) return
+
+    if (!isValidListingTitle(form.title)) {
+
+      setError('Title must be between 4 and 200 characters.')
+
+      return
+
+    }
+
+    if (!isValidPrice(form.price)) {
+
+      setError('Enter a valid price.')
+
+      return
+
+    }
+
+    if (!isValidListingDescription(form.description)) {
+
+      setError('Description is too long.')
+
+      return
+
+    }
+
+    setSubmitting(true)
+
+    setError('')
+
+    try {
+
+      const areaLabel = form.village || form.mandal
+
+      const mandalData = ALL_MANDALS.find((m) => m.name === form.mandal)
+
+      const isPlot = form.type === 'land' || form.type === 'agriculture'
+
+      const bedrooms = form.type === 'house' ? 2 : form.type === 'apartment' ? 2 : 0
+
+      const mockImages = imagesForBedrooms(bedrooms, form.type)
+
+      const fallbackImages = form.imagePreviews.filter((src) => src.startsWith('http'))
+
+      await createListing(
+
+        {
+
+          type: form.type,
+
+          purpose: form.purpose,
+
+          title: sanitizeText(form.title, 200),
+
+          description: sanitizeText(form.description, 5000),
+
+          price: Number(form.price),
+
+          location: {
+
+            area: areaLabel,
+
+            mandal: form.mandal,
+
+            village: form.village || undefined,
+
+            city: 'Nizamabad',
+
+            lat: mandalData?.lat ?? 18.6725,
+
+            lng: mandalData?.lng ?? 78.0941,
+
+          },
+
+          images: fallbackImages.length ? fallbackImages : [mockImages[0]],
+
+          sqft: form.type === 'land' ? 2400 : isPlot ? 0 : bedrooms === 1 ? 650 : bedrooms === 2 ? 1200 : 1650,
+
+          acres: form.type === 'agriculture' ? 2 : undefined,
+
+          bedrooms: isPlot ? 0 : bedrooms,
+
+          facing: 'East',
+
+          readyToMove: !isPlot,
+
+        },
+
+        user.id,
+
+        form.imageFiles,
+
+      )
+
+      setSubmitted(true)
+
+      setTimeout(() => navigate('/browse'), 1500)
+
+    } catch (err) {
+
+      setError(err.message || 'Could not post listing')
+
+    } finally {
+
+      setSubmitting(false)
+
+    }
+
+  }
+
+
 
   const canNext = () => {
+
     if (step === 0) return !!form.type
-    if (step === 1) return form.title.length > 3
+
+    if (step === 1) return isValidListingTitle(form.title) && isValidListingDescription(form.description)
+
     if (step === 2) return true
-    if (step === 3) return form.price && form.area
+
+    if (step === 3) return isValidPrice(form.price) && form.mandal
+
     return false
+
   }
 
+
+
   return (
+
     <div className="px-4 lg:max-w-2xl lg:mx-auto lg:px-0">
+
       <div className="flex items-center gap-3 mb-6 pt-2">
+
         <button type="button" onClick={() => navigate(-1)} className="rounded-full p-1 hover:bg-surface">
+
           <Icon name="arrow_back" size={22} />
+
         </button>
+
         <h1 className="text-xl font-bold">{t('postProperty')}</h1>
+
       </div>
 
-      {/* Step indicator */}
+
+
       <div className="flex gap-2 mb-8 overflow-x-auto">
+
         {STEPS.map((s, i) => (
+
           <div key={s} className="flex items-center gap-2 shrink-0">
+
             <div
+
               className={`h-2 rounded-full transition-all ${
+
                 i <= step ? 'bg-teal w-8' : 'bg-border w-6'
+
               }`}
+
             />
+
             <span className={`text-xs ${i === step ? 'text-teal font-medium' : 'text-muted'}`}>
+
               {t(s === 'priceLocation' ? 'priceLocation' : s)}
+
             </span>
+
           </div>
+
         ))}
+
       </div>
+
+
 
       {submitted ? (
+
         <div className="flex flex-col items-center py-16 text-center">
+
           <div className="text-5xl mb-4">✅</div>
+
           <p className="font-semibold text-lg">{t('listingPosted')}</p>
+
         </div>
+
       ) : (
+
         <>
+
           {step === 0 && (
+
             <div className="space-y-3">
+
               <p className="text-sm text-muted mb-4">{t('category')}</p>
+
               {CATEGORIES.map((cat) => (
+
                 <button
+
                   key={cat}
+
                   type="button"
+
                   onClick={() => update('type', cat)}
+
                   className={`w-full rounded-2xl border-2 p-5 text-left font-medium transition-colors ${
+
                     form.type === cat
+
                       ? 'border-teal bg-teal-light'
+
                       : 'border-border hover:border-teal/50'
+
                   }`}
+
                 >
+
                   {t(cat)}
+
                 </button>
+
               ))}
+
             </div>
+
           )}
+
+
 
           {step === 1 && (
+
             <div className="space-y-4">
+
               <div>
+
                 <label className="text-sm font-medium">{t('title')}</label>
+
                 <input
+
                   type="text"
+
                   value={form.title}
+
                   onChange={(e) => update('title', e.target.value)}
+
                   placeholder={t('titlePlaceholder')}
+
                   className="mt-1.5 w-full rounded-xl border border-border px-4 py-3 text-sm outline-none focus:border-teal"
+
                 />
+
               </div>
+
               <div>
+
                 <label className="text-sm font-medium">{t('description')}</label>
+
                 <textarea
+
                   value={form.description}
+
                   onChange={(e) => update('description', e.target.value)}
+
                   placeholder={t('descPlaceholder')}
+
                   rows={5}
+
                   className="mt-1.5 w-full rounded-xl border border-border px-4 py-3 text-sm outline-none focus:border-teal resize-none"
+
                 />
+
               </div>
+
             </div>
+
           )}
+
+
 
           {step === 2 && (
+
             <div>
+
               <p className="text-sm font-medium mb-3">{t('photos')}</p>
+
               <div className="grid grid-cols-2 gap-3">
-                {form.images.map((img, i) => (
+
+                {form.imagePreviews.map((img, i) => (
+
                   <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-border">
+
                     <img src={img} alt="" className="h-full w-full object-cover" />
+
                   </div>
+
                 ))}
-                {form.images.length < 4 && (
-                  <button
-                    type="button"
-                    onClick={handleAddPhoto}
-                    className="flex aspect-square flex-col items-center justify-center rounded-xl border-2 border-dashed border-border text-muted hover:border-teal hover:text-teal transition-colors"
-                  >
-                    <Icon name="photo_camera" size={28} />
-                    <span className="text-xs mt-2">{t('uploadPhotos')}</span>
-                  </button>
+
+                {form.imagePreviews.length < 4 && (
+
+                  <>
+
+                    <label className="flex aspect-square flex-col items-center justify-center rounded-xl border-2 border-dashed border-border text-muted hover:border-teal hover:text-teal transition-colors cursor-pointer">
+
+                      <Icon name="photo_camera" size={28} />
+
+                      <span className="text-xs mt-2">{t('uploadPhotos')}</span>
+
+                      <input
+
+                        type="file"
+
+                        accept="image/*"
+
+                        multiple
+
+                        className="sr-only"
+
+                        onChange={handleAddPhoto}
+
+                      />
+
+                    </label>
+
+                    {form.imagePreviews.length === 0 && (
+
+                      <button
+
+                        type="button"
+
+                        onClick={handleAddPlaceholder}
+
+                        className="flex aspect-square flex-col items-center justify-center rounded-xl border border-border text-xs text-muted hover:border-teal hover:text-teal transition-colors"
+
+                      >
+
+                        Use sample photo
+
+                      </button>
+
+                    )}
+
+                  </>
+
                 )}
+
               </div>
+
             </div>
+
           )}
+
+
 
           {step === 3 && (
+
             <div className="space-y-4">
+
               <div>
-                <label className="text-sm font-medium">{t('price')}</label>
-                <input
-                  type="number"
-                  value={form.price}
-                  onChange={(e) => update('price', e.target.value)}
-                  placeholder="6800000"
-                  className="mt-1.5 w-full rounded-xl border border-border px-4 py-3 text-sm outline-none focus:border-teal"
+
+                <label className="text-sm font-medium">{t('listingType')}</label>
+
+                <PurposeToggle
+                  mode="post"
+                  value={form.purpose}
+                  onChange={(id) => update('purpose', id)}
+                  className="mt-2"
                 />
+
               </div>
+
               <div>
-                <label className="text-sm font-medium">{t('location')}</label>
-                <select
-                  value={form.area}
-                  onChange={(e) => update('area', e.target.value)}
+
+                <label className="text-sm font-medium">
+
+                  {form.purpose === 'rent' ? t('rentPerMonth') : t('price')}
+
+                </label>
+
+                <input
+
+                  type="number"
+
+                  value={form.price}
+
+                  onChange={(e) => update('price', e.target.value)}
+
+                  placeholder={form.purpose === 'rent' ? '18000' : '6800000'}
+
                   className="mt-1.5 w-full rounded-xl border border-border px-4 py-3 text-sm outline-none focus:border-teal"
-                >
-                  <option value="">{t('selectLocation')}</option>
-                  {LOCATIONS.filter((l) => l !== 'Nizamabad').map((loc) => (
-                    <option key={loc} value={loc}>{loc}</option>
-                  ))}
-                </select>
+
+                />
+
               </div>
+
+              <div>
+
+                <label className="text-sm font-medium">{t('mandal')}</label>
+
+                <select
+
+                  value={form.mandal}
+
+                  onChange={(e) => {
+
+                    update('mandal', e.target.value)
+
+                    update('village', '')
+
+                  }}
+
+                  className="mt-1.5 w-full rounded-xl border border-border px-4 py-3 text-sm outline-none focus:border-teal"
+
+                >
+
+                  <option value="">{t('selectMandal')}</option>
+
+                  {getMandalNames().map((m) => (
+
+                    <option key={m} value={m}>{m}</option>
+
+                  ))}
+
+                </select>
+
+              </div>
+
+              {form.mandal && (
+
+                <div>
+
+                  <label className="text-sm font-medium">{t('village')}</label>
+
+                  <select
+
+                    value={form.village}
+
+                    onChange={(e) => update('village', e.target.value)}
+
+                    className="mt-1.5 w-full rounded-xl border border-border px-4 py-3 text-sm outline-none focus:border-teal"
+
+                  >
+
+                    <option value="">{t('selectVillageOptional')}</option>
+
+                    {(ALL_MANDALS.find((m) => m.name === form.mandal)?.villages || []).map((v) => (
+
+                      <option key={v} value={v}>{v}</option>
+
+                    ))}
+
+                  </select>
+
+                </div>
+
+              )}
+
             </div>
+
           )}
 
+
+
+          {error && <p className="mt-4 text-sm text-red-500 text-center">{error}</p>}
+
+
+
           <div className="flex gap-3 mt-8 pb-8">
+
             {step > 0 && (
+
               <button
+
                 type="button"
+
                 onClick={() => setStep((s) => s - 1)}
+
                 className="flex-1 rounded-full border border-border py-3 font-medium hover:bg-surface"
+
               >
+
                 {t('back')}
+
               </button>
+
             )}
+
             {step < STEPS.length - 1 ? (
+
               <button
+
                 type="button"
+
                 onClick={() => setStep((s) => s + 1)}
+
                 disabled={!canNext()}
+
                 className="flex-1 rounded-full bg-text py-3 font-medium text-white hover:bg-black disabled:opacity-40"
+
               >
+
                 {t('next')}
+
               </button>
+
             ) : (
+
               <button
+
                 type="button"
+
                 onClick={handleSubmit}
-                disabled={!canNext()}
+
+                disabled={!canNext() || submitting}
+
                 className="flex-1 rounded-full bg-text py-3 font-medium text-white hover:bg-black disabled:opacity-40"
+
               >
-                {t('postListing')}
+
+                {submitting ? 'Posting…' : t('postListing')}
+
               </button>
+
             )}
+
           </div>
+
         </>
+
       )}
+
     </div>
+
   )
+
 }
+
+

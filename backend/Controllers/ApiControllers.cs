@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using NizamProperty.Api.Models;
+using NizamProperty.Api.Security;
 using NizamProperty.Api.Services;
 
 namespace NizamProperty.Api.Controllers;
@@ -31,6 +32,7 @@ public class PropertiesController : ControllerBase
     }
 
     [HttpPost]
+    [RequireUserHeader]
     public ActionResult<Property> Create([FromBody] CreatePropertyRequest req, [FromHeader(Name = "X-User-Id")] string userId)
     {
         var props = _store.GetProperties();
@@ -55,11 +57,13 @@ public class PropertiesController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public IActionResult Delete(string id)
+    [RequireUserHeader]
+    public IActionResult Delete(string id, [FromHeader(Name = "X-User-Id")] string userId)
     {
         var props = _store.GetProperties();
         var idx = props.FindIndex(p => p.Id == id);
         if (idx < 0) return NotFound();
+        if (props[idx].SellerId != userId) return Forbid();
         props.RemoveAt(idx);
         _store.SaveProperties(props);
         return NoContent();
@@ -100,11 +104,16 @@ public class ConversationsController : ControllerBase
     }
 
     [HttpPost("{id}/messages")]
+    [RequireUserHeader]
     public ActionResult<ChatMessage> SendMessage(string id, [FromBody] SendMessageRequest req, [FromHeader(Name = "X-User-Id")] string userId)
     {
         var convs = _store.GetConversations();
         var idx = convs.FindIndex(c => c.Id == id);
         if (idx < 0) return NotFound();
+
+        var conv = convs[idx];
+        if (conv.BuyerId != userId && conv.SellerId != userId)
+            return Forbid();
 
         var msg = new ChatMessage
         {
@@ -128,6 +137,7 @@ public class SupportController : ControllerBase
     public SupportController(LocalDataStore store) => _store = store;
 
     [HttpPost]
+    [RequireUserHeader]
     public ActionResult<SupportTicket> Create([FromBody] CreateTicketRequest req, [FromHeader(Name = "X-User-Id")] string userId)
     {
         var tickets = _store.GetTickets();

@@ -1,4 +1,3 @@
-import Icon from './Icon'
 import { useLanguage } from '../i18n/LanguageContext'
 
 export default function LanguageToggle({ className = '' }) {
@@ -8,10 +7,9 @@ export default function LanguageToggle({ className = '' }) {
     <button
       type="button"
       onClick={toggleLanguage}
-      className={`inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-surface transition-colors ${className}`}
+      className={`inline-flex min-w-[5.5rem] items-center justify-center rounded-full border border-border bg-white px-3 py-1.5 text-sm font-semibold text-text hover:bg-surface transition-colors ${className}`}
       aria-label="Toggle language"
     >
-      <Icon name="translate" size={16} className="text-muted" />
       {t('language')}
     </button>
   )

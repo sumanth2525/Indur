@@ -1,18 +1,35 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { useAuth } from '../context/AuthContext'
+import { patchProfile } from '../services/dataApi'
 import { translations } from './translations'
 
 const LanguageContext = createContext(null)
+const DEFAULT_LANG = 'en'
 
 export function LanguageProvider({ children }) {
-  const [lang, setLang] = useState(() => localStorage.getItem('nizam_lang') || 'en')
+  const { user, setUser } = useAuth()
+  const [lang, setLang] = useState(DEFAULT_LANG)
 
-  const toggleLanguage = useCallback(() => {
-    setLang((prev) => {
-      const next = prev === 'en' ? 'te' : 'en'
-      localStorage.setItem('nizam_lang', next)
-      return next
-    })
-  }, [])
+  useEffect(() => {
+    if (user?.lang === 'en' || user?.lang === 'te') {
+      setLang(user.lang)
+    } else if (!user) {
+      setLang(DEFAULT_LANG)
+    }
+  }, [user?.id, user?.lang])
+
+  const toggleLanguage = useCallback(async () => {
+    const next = lang === 'en' ? 'te' : 'en'
+    setLang(next)
+    if (!user?.id) return
+    try {
+      await patchProfile(user.id, { lang: next })
+      setUser((prev) => (prev ? { ...prev, lang: next } : prev))
+    } catch (err) {
+      console.error('Failed to save language preference', err)
+      setLang(lang)
+    }
+  }, [lang, user?.id, setUser])
 
   const t = useCallback(
     (key) => translations[lang][key] ?? translations.en[key] ?? key,

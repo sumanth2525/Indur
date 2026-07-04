@@ -1,18 +1,24 @@
 import { Link } from 'react-router-dom'
 import Icon from './Icon'
 import { useLanguage } from '../i18n/LanguageContext'
-import { formatPrice } from '../services/storage'
-import { TYPE_COLORS } from '../data/seed'
+import { useAuth } from '../context/AuthContext'
+import { formatPrice } from '../services/formatters'
+import { formatListingLocation } from '../utils/pii'
+import { TYPE_COLORS } from '../data/constants'
 import { DEFAULT_PROPERTY_IMAGE } from '../data/mockImages'
+import { trackPropertyClick } from '../services/analytics'
 
 export default function PropertyCard({ property, isSaved, onToggleSave, layout = 'list' }) {
   const { t } = useLanguage()
+  const { isGuest } = useAuth()
+  const locationLabel = formatListingLocation(property.location, isGuest)
   const typeClass = TYPE_COLORS[property.type] || 'bg-gray-100 text-gray-700'
 
   if (layout === 'grid') {
     return (
       <Link
         to={`/property/${property.id}`}
+        onClick={() => trackPropertyClick(property, 'grid')}
         className="group block rounded-2xl border border-border bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow"
       >
         <div className="relative aspect-[4/3] overflow-hidden">
@@ -39,7 +45,7 @@ export default function PropertyCard({ property, isSaved, onToggleSave, layout =
           <p className="font-medium text-sm mt-0.5 line-clamp-1">{property.title}</p>
           <p className="text-muted text-xs mt-1 flex items-center gap-1">
             <Icon name="location_on" size={12} />
-            {property.location?.area}, {property.location?.city}
+            {locationLabel}
           </p>
         </div>
       </Link>
@@ -49,6 +55,7 @@ export default function PropertyCard({ property, isSaved, onToggleSave, layout =
   return (
     <Link
       to={`/property/${property.id}`}
+      onClick={() => trackPropertyClick(property, 'list')}
       className="flex gap-3 rounded-2xl border border-border bg-white p-3 shadow-sm hover:shadow-md transition-shadow"
     >
       <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl">
@@ -76,7 +83,7 @@ export default function PropertyCard({ property, isSaved, onToggleSave, layout =
         <p className="font-semibold text-sm mt-1 line-clamp-1">{property.title}</p>
         <p className="text-muted text-xs mt-0.5 flex items-center gap-1">
           <Icon name="location_on" size={11} />
-          {property.location?.area}
+          {locationLabel}
         </p>
         <p className="font-bold text-sm mt-1">{formatPrice(property.price)}</p>
       </div>

@@ -1,73 +1,122 @@
-import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useMemo, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useLanguage } from '../i18n/LanguageContext'
 import { useAuth } from '../context/AuthContext'
-import { storage } from '../services/storage'
-import { toggleSaved } from '../data/seed'
+import { browseLocationLabel, resolveBrowseLocation } from '../services/formatters'
+import { watchListings, toggleSavedListing, patchProfile, fetchListings } from '../services/dataApi'
+import { propertyMatchesLocation, divisionLocation, REVENUE_DIVISIONS } from '../data/nizamabadLocations'
+import { BROWSE_CATEGORIES, propertyMatchesCategory, heroTypeToCategory } from '../data/browseFilters'
 import PropertyListItem, { PropertyGridCard } from '../components/PropertyListItem'
 import BackgroundDecor from '../components/BackgroundDecor'
 import LanguageToggle from '../components/LanguageToggle'
 import LocationPicker from '../components/LocationPicker'
 import Import99AcresButton from '../components/Import99AcresButton'
-
-const CATEGORIES = ['all', 'house', 'land', 'agriculture', 'apartment']
+import PurposeToggle, { browsePurposeToListing } from '../components/PurposeToggle'
+import RotatingTagline from '../components/RotatingTagline'
+import WhatsAppContactButton from '../components/WhatsAppContactButton'
 
 export default function Home() {
   const { t } = useLanguage()
-  const { user, refreshUser } = useAuth()
+  const { user, refreshUser, setUser, isGuest, isAuthenticated } = useAuth()
   const navigate = useNavigate()
-  const [location, setLocation] = useState(() => storage.getLocation())
-  const [purpose, setPurpose] = useState('sell')
+  const routeLocation = useLocation()
+  const [location, setLocation] = useState(() => resolveBrowseLocation(user))
+  const [purpose, setPurpose] = useState('buy')
   const [category, setCategory] = useState('all')
-  const [properties, setProperties] = useState(() => storage.getProperties())
+  const [properties, setProperties] = useState([])
   const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    setLocation(resolveBrowseLocation(user))
+  }, [user?.browseLocation, user?.location])
+
+  useEffect(() => {
+    return watchListings(setProperties, (err) => console.error('Listings sync failed', err))
+  }, [])
+
+  useEffect(() => {
+    const pending = routeLocation.state?.search
+    if (!pending) return
+
+    if (pending.intent === 'rent' || pending.intent === 'pg') setPurpose('rent')
+    else if (pending.intent === 'buy') setPurpose('buy')
+
+    if (pending.propType) setCategory(heroTypeToCategory(pending.propType))
+
+    const division = REVENUE_DIVISIONS.find(
+      (d) => d.name.toLowerCase() === String(pending.city || '').toLowerCase(),
+    )
+    if (division) setLocation(divisionLocation(division.id))
+
+    if (pending.query) setSearch(String(pending.query).split(',')[0].trim())
+
+    navigate(routeLocation.pathname, { replace: true, state: {} })
+  }, [routeLocation.state, routeLocation.pathname, navigate])
 
   const filtered = useMemo(() => {
     return properties.filter((p) => {
       if (p.status !== 'active') return false
-      if (purpose === 'sell' && p.purpose && p.purpose !== 'sell') return false
+      if (purpose === 'buy' && p.purpose && p.purpose !== 'sell') return false
       if (purpose === 'rent' && p.purpose !== 'rent') return false
-      if (category !== 'all' && p.type !== category) return false
-      if (location !== 'Nizamabad' && p.location?.area !== location && p.location?.city !== location) {
-        if (location !== 'Nizamabad') return p.location?.area === location || p.location?.city === location
-      }
+      if (!propertyMatchesCategory(p, category)) return false
+      if (!propertyMatchesLocation(p, location)) return false
       if (search && !p.title.toLowerCase().includes(search.toLowerCase())) return false
       return true
     })
   }, [properties, category, location, search, purpose])
 
-  const handleLocationChange = (loc) => {
+  const handleLocationChange = async (loc) => {
     setLocation(loc)
-    storage.setLocation(loc)
+    if (!user?.id) return
+    const updated = await patchProfile(user.id, {
+      browseLocation: loc,
+      location: loc.label,
+    })
+    if (updated) setUser(updated)
   }
 
-  const handleToggleSave = (propertyId) => {
-    toggleSaved(user.id, propertyId)
+  const handleToggleSave = async (propertyId) => {
+    if (isGuest) {
+      navigate('/login', { state: { from: '/browse' } })
+      return
+    }
+    await toggleSavedListing(user.id, propertyId)
     refreshUser()
   }
 
-  const myListings = properties.filter((p) => p.sellerId === user?.id && p.status === 'active')
+  const goToPost = () => {
+    if (isGuest) {
+      navigate('/login', { state: { from: '/post' } })
+      return
+    }
+    navigate('/post')
+  }
+
+  const myListings = isAuthenticated ? properties.filter((p) => p.sellerId === user?.id && p.status === 'active') : []
   const totalViews = myListings.reduce((sum, p) => sum + (p.views || 0), 0)
+  const locationLabel = browseLocationLabel(user)
+  const areaLabel = location.label || t('allDistrict')
 
   return (
     <div className="relative min-h-full bg-white">
       <BackgroundDecor />
 
-      {/* Mobile — reference layout */}
       <div className="relative lg:hidden px-5 pt-6 pb-2">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-medium tracking-[0.12em] text-muted-light uppercase">
-              {t('trendingToday')}
+              {t('browseInArea').replace('{area}', areaLabel)}
             </p>
-            <h1 className="text-[2rem] font-bold leading-tight tracking-tight mt-1">{t('properties')}</h1>
+            <h1 className="text-[1.65rem] font-bold leading-tight tracking-tight mt-1">
+              <RotatingTagline />
+            </h1>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <LanguageToggle className="!px-2.5 !py-1 !text-xs" />
             <button
               type="button"
-              onClick={() => navigate('/post')}
+              onClick={goToPost}
               className="rounded-full border border-border-strong px-4 py-1.5 text-sm font-medium hover:bg-surface transition-colors"
             >
               + {t('post')}
@@ -79,29 +128,17 @@ export default function Home() {
           <LocationPicker value={location} onChange={handleLocationChange} />
         </div>
 
-        <div className="mt-3 inline-flex rounded-full border border-border-strong p-0.5">
-          <button
-            type="button"
-            onClick={() => setPurpose('sell')}
-            className={`rounded-full px-5 py-2 text-sm font-medium transition-colors ${
-              purpose === 'sell' ? 'bg-text text-white' : 'text-text hover:bg-surface'
-            }`}
-          >
-            {t('forSale')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setPurpose('rent')}
-            className={`rounded-full px-5 py-2 text-sm font-medium transition-colors ${
-              purpose === 'rent' ? 'bg-text text-white' : 'text-text hover:bg-surface'
-            }`}
-          >
-            {t('forRent')}
-          </button>
+        <div className="mt-3">
+          <PurposeToggle
+            value={purpose}
+            onChange={setPurpose}
+            onSell={goToPost}
+            trailingAction={<WhatsAppContactButton variant="icon" />}
+          />
         </div>
 
         <div className="mt-4 flex gap-2 overflow-x-auto scrollbar-none">
-          {CATEGORIES.map((cat) => (
+          {BROWSE_CATEGORIES.map((cat) => (
             <button
               key={cat}
               type="button"
@@ -118,11 +155,13 @@ export default function Home() {
         </div>
 
         <div className="mt-4 mb-2">
-          <Import99AcresButton
-            location={location}
-            purpose={purpose}
-            onImported={() => setProperties(storage.getProperties())}
-          />
+          {isAuthenticated && (
+            <Import99AcresButton
+              location={locationLabel}
+              purpose={browsePurposeToListing(purpose)}
+              onImported={() => fetchListings().then(setProperties)}
+            />
+          )}
         </div>
 
         {filtered.length === 0 ? (
@@ -132,10 +171,10 @@ export default function Home() {
             {purpose === 'rent' && (
               <button
                 type="button"
-                onClick={() => setPurpose('sell')}
+                onClick={() => setPurpose('buy')}
                 className="mt-4 text-sm font-medium underline underline-offset-2"
               >
-                {t('forSale')}
+                {t('buy')}
               </button>
             )}
           </div>
@@ -145,7 +184,7 @@ export default function Home() {
               <PropertyListItem
                 key={p.id}
                 property={p}
-                isSaved={user?.saved?.includes(p.id)}
+                isSaved={isAuthenticated && user?.saved?.includes(p.id)}
                 onToggleSave={handleToggleSave}
                 showDivider={i < filtered.length - 1}
               />
@@ -154,61 +193,64 @@ export default function Home() {
         )}
       </div>
 
-      {/* Desktop dashboard */}
       <div className="hidden lg:block">
         <div className="flex items-end justify-between mb-8">
           <div>
             <p className="text-[11px] font-medium tracking-[0.12em] text-muted-light uppercase">
-              {t('welcomeBack')}, {user?.name}
+              {isGuest ? t('guestBrowsing') : `${t('welcomeBack')}, ${user?.name}`}
             </p>
-            <h1 className="text-4xl font-bold tracking-tight mt-1">{t('properties')}</h1>
+            <h1 className="text-3xl font-bold tracking-tight mt-1">
+              <RotatingTagline />
+            </h1>
+            <p className="text-sm text-muted mt-1">
+              {t('browseInArea').replace('{area}', areaLabel)}
+            </p>
           </div>
           <button
             type="button"
-            onClick={() => navigate('/post')}
+            onClick={goToPost}
             className="rounded-full border border-border-strong px-5 py-2 text-sm font-medium hover:bg-surface transition-colors"
           >
             + {t('postProperty')}
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="rounded-2xl border border-border p-5">
-            <p className="text-muted text-sm">{t('activeListings')}</p>
-            <p className="text-3xl font-bold mt-1 tabular-nums">{myListings.length}</p>
+        {isAuthenticated ? (
+          <div className="grid grid-cols-3 gap-4 mb-8">
+            <div className="rounded-2xl border border-border p-5">
+              <p className="text-muted text-sm">{t('activeListings')}</p>
+              <p className="text-3xl font-bold mt-1 tabular-nums">{myListings.length}</p>
+            </div>
+            <div className="rounded-2xl border border-border p-5">
+              <p className="text-muted text-sm">{t('saved')}</p>
+              <p className="text-3xl font-bold mt-1 tabular-nums">{user?.saved?.length || 0}</p>
+            </div>
+            <div className="rounded-2xl border border-border p-5">
+              <p className="text-muted text-sm">{t('totalViews')}</p>
+              <p className="text-3xl font-bold mt-1 tabular-nums">{totalViews}</p>
+            </div>
           </div>
-          <div className="rounded-2xl border border-border p-5">
-            <p className="text-muted text-sm">{t('saved')}</p>
-            <p className="text-3xl font-bold mt-1 tabular-nums">{user?.saved?.length || 0}</p>
+        ) : (
+          <div className="mb-8 rounded-2xl border border-border bg-surface p-5">
+            <p className="text-sm text-muted">{t('guestPiiNotice')}</p>
+            <button
+              type="button"
+              onClick={() => navigate('/login', { state: { from: '/browse' } })}
+              className="mt-3 rounded-full bg-text px-5 py-2 text-sm font-medium text-white hover:bg-black transition-colors"
+            >
+              {t('login')}
+            </button>
           </div>
-          <div className="rounded-2xl border border-border p-5">
-            <p className="text-muted text-sm">{t('totalViews')}</p>
-            <p className="text-3xl font-bold mt-1 tabular-nums">{totalViews}</p>
-          </div>
-        </div>
+        )}
 
         <div className="mb-6 space-y-3">
           <LocationPicker value={location} onChange={handleLocationChange} />
-          <div className="inline-flex rounded-full border border-border-strong p-0.5">
-            <button
-              type="button"
-              onClick={() => setPurpose('sell')}
-              className={`rounded-full px-5 py-2 text-sm font-medium transition-colors ${
-                purpose === 'sell' ? 'bg-text text-white' : 'text-text hover:bg-surface'
-              }`}
-            >
-              {t('forSale')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setPurpose('rent')}
-              className={`rounded-full px-5 py-2 text-sm font-medium transition-colors ${
-                purpose === 'rent' ? 'bg-text text-white' : 'text-text hover:bg-surface'
-              }`}
-            >
-              {t('forRent')}
-            </button>
-          </div>
+          <PurposeToggle
+            value={purpose}
+            onChange={setPurpose}
+            onSell={goToPost}
+            trailingAction={<WhatsAppContactButton variant="icon" />}
+          />
         </div>
 
         <div className="flex flex-wrap items-center gap-4 mb-6">
@@ -224,7 +266,7 @@ export default function Home() {
           </div>
 
           <div className="flex gap-2">
-            {CATEGORIES.map((cat) => (
+            {BROWSE_CATEGORIES.map((cat) => (
               <button
                 key={cat}
                 type="button"
@@ -242,11 +284,13 @@ export default function Home() {
         </div>
 
         <div className="mb-6">
-          <Import99AcresButton
-            location={location}
-            purpose={purpose}
-            onImported={() => setProperties(storage.getProperties())}
-          />
+          {isAuthenticated && (
+            <Import99AcresButton
+              location={locationLabel}
+              purpose={browsePurposeToListing(purpose)}
+              onImported={() => fetchListings().then(setProperties)}
+            />
+          )}
         </div>
 
         {filtered.length === 0 ? (
@@ -260,7 +304,7 @@ export default function Home() {
               <PropertyGridCard
                 key={p.id}
                 property={p}
-                isSaved={user?.saved?.includes(p.id)}
+                isSaved={isAuthenticated && user?.saved?.includes(p.id)}
                 onToggleSave={handleToggleSave}
               />
             ))}
